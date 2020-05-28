@@ -6,7 +6,7 @@ using namespace cv;
 #define HORIZONTAL 0
 #define VERTICAL 1
 #define STRIPE_NUM 26
-
+ 
 void computeWrappedPhase(Mat* img1, Mat* img2, Mat* img3, Mat* dstWrappedPhase)
 {
     typedef float phaseType;
@@ -69,27 +69,32 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
 
     if (stripe == HORIZONTAL)//水平条纹
     {
-        for (int i = 0; i < projectPhaseImage.rows; ++i)
+        for (int row = 0; row < projectPhaseImage.rows; ++row)
         {
-            float phaseAtPixel = (i * 2 * CV_PI * STRIPE_NUM) / 480 - (2 * CV_PI) / 3;
+            float phaseAtPixel = (row * 2 * CV_PI * STRIPE_NUM) / projectPhaseImage.cols - (2 * CV_PI) / 3;
             while (phaseAtPixel > CV_PI)
             {
                 int K = phaseAtPixel / CV_PI;
                 phaseAtPixel = phaseAtPixel - K*CV_PI;
             }
-            for (int j = 0; j < projectPhaseImage.cols; j++)
+            while (phaseAtPixel < -CV_PI)
             {
-                for (int k = 0; k < leftPhaseImage.cols; k++)
+                int K = phaseAtPixel / CV_PI;
+                phaseAtPixel = phaseAtPixel + K * CV_PI;
+            }
+            for (int col = 0; col < projectPhaseImage.cols; ++col)
+            {
+                for (int col_leftPhaseImage = 0; col_leftPhaseImage < leftPhaseImage.cols; ++col_leftPhaseImage)
                 {
-                    if (leftPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    if (leftPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
                     {                        
-                        float Z = (f * T) / (k - i);
-                        leftEqualPhasePoint.push_back(Point3f(i, k, Z));
+                        float Z = (f * T) / (col_leftPhaseImage - row);
+                        leftEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
                     }
-                    if (rightPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    if (rightPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (i - k);
-                        rightEqualPhasePoint.push_back(Point3f(i, k, Z));
+                        float Z = (f * T) / (row - col_leftPhaseImage);
+                        rightEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
                     }
                 }
             }
@@ -97,27 +102,33 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
     }
     if (stripe == VERTICAL)//竖直条纹
     {
-        for (int i = 0; i < projectPhaseImage.rows; ++i)
+#pragma omp parallel for
+        for (int col = 0; col < projectPhaseImage.cols; ++col)
         {
-            float phaseAtPixel = (i * 2 * CV_PI * STRIPE_NUM) / 480 - (2 * CV_PI) / 3;
+            float phaseAtPixel = (col * 2 * CV_PI * STRIPE_NUM) / projectPhaseImage.cols - (2 * CV_PI) / 3;
             while (phaseAtPixel > CV_PI)
             {
                 int K = phaseAtPixel / CV_PI;
                 phaseAtPixel = phaseAtPixel - K * CV_PI;
             }
-            for (int j = 0; j < projectPhaseImage.cols; j++)
+            while (phaseAtPixel < -CV_PI)
             {
-                for (int k = 0; k < leftPhaseImage.cols; k++)
+                int K = phaseAtPixel / CV_PI;
+                phaseAtPixel = phaseAtPixel + K * CV_PI;
+            }
+            for (int row = 0; row < projectPhaseImage.rows; ++row)
+            {
+                for (int col_leftPhaseImage = 0; col_leftPhaseImage < leftPhaseImage.cols; ++col_leftPhaseImage)
                 {
-                    if (leftPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    if (leftPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (k - i);
-                        leftEqualPhasePoint.push_back(Point3f(i, k, Z));
+                        float Z = (f * T) / (col_leftPhaseImage - row);
+                        leftEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
                     }
-                    if (rightPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    if (rightPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (i - k);
-                        rightEqualPhasePoint.push_back(Point3f(i, k, Z));
+                        float Z = (f * T) / (row - col_leftPhaseImage);
+                        rightEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
                     }
                 }
             }
