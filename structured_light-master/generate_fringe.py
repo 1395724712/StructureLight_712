@@ -4,8 +4,8 @@ import cv2
 from numpy import *
 import sys
 from PIL import Image
-width  = 480 
-height = 640
+width  = 964 
+height = 1292
 
 nstripes = 30
 alpha = 2*pi/3 # phase shift 120 degree
@@ -42,10 +42,8 @@ def genFringeVert():
     a = array(imgarr,uint8)
     index = 1
     for i in a:
-        print type(i)
-        print i
         im = Image.fromarray(i)        
-        im.save(pattern_dir + "/Fringe_vert" + str(index) + ".png")
+        im.save(pattern_dir + "/Fringe_vert" + str(index) + ".bmp")
         index = index + 1    
 
 def genFringeHor():
@@ -53,27 +51,15 @@ def genFringeHor():
     a = array(imgarr,uint8)
     index = 1
     for i in a:
-        print type(i)
-        print i
         im = Image.fromarray(i.transpose())        
-        im.save(pattern_dir + "/Fringe_vert" + str(index) + ".png")
+        im.save(pattern_dir + "/Fringe_hor" + str(index) + ".bmp")
         index = index + 1
 
 if __name__ == "__main__":
 
-    nstripes = 26 #条纹数量
-    # baytest = cv2.imread('./pattern/fringe1.png', -1)
-    genFringeHor() # 水平条纹
-    # genFringeVert() # 竖直条纹
-    i=1
-    # for img in images:
-    #     cv2.ShowImage("fringe%d"%i,img)
-    #     cv2.SaveImage("%s/fringe%d.png"%(pattern_dir,i),img)
-    #     i += 1
+    nstripes = 108 #条纹数量
 
-    # while True:
-    #     k = cv2.WaitKey(0)
-    #     if k=='q':
-    #         break
+    # genFringeHor() # 水平条纹
+    genFringeVert() # 竖直条纹
 
 

@@ -2,10 +2,11 @@
 #include <vector>
 using namespace std;
 using namespace cv;
-typedef Point_<int> Point2i;
+
 #define HORIZONTAL 0
 #define VERTICAL 1
 #define STRIPE_NUM 26
+
 void computeWrappedPhase(Mat* img1, Mat* img2, Mat* img3, Mat* dstWrappedPhase)
 {
     typedef float phaseType;
@@ -51,7 +52,7 @@ Mat getWrappedPhase(vector<string> &path)
     return dstWrappedPhase;
 }
 //获取双目照片与投影仪相位相等的点的坐标
-vector<vector<Point2i>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseImage, Mat& projectPhaseImage, int stripe)
+vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseImage, Mat& projectPhaseImage, int stripe)
 {
     //对于投影仪上任意一个像素 P ，求出它的相位，通过 【(x*2*PI*条纹数)/width + 初相 】得到
     //由于现在没有双目照片，就先假定吧
@@ -59,10 +60,14 @@ vector<vector<Point2i>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
     *@input:左右两张条纹图，投影仪投射的条纹图，遍历一行（极线约束的这一行）找相位相等的点
     *@output：vector 存储相位相等点的坐标
     */
-    vector<Point2i> leftEqualPhasePoint;
-    vector<Point2i> rightEqualPhasePoint;
-    vector<vector<Point2i>> EqualPhasePoint;
-    if (stripe == HORIZONTAL)
+    vector<Point3f> leftEqualPhasePoint;
+    vector<Point3f> rightEqualPhasePoint;
+    vector<vector<Point3f>> EqualPhasePoint;
+
+    float f = 0.035;//焦距 focal
+    float T = 0.36;//投影仪至相机光心距离
+
+    if (stripe == HORIZONTAL)//水平条纹
     {
         for (int i = 0; i < projectPhaseImage.rows; ++i)
         {
@@ -72,24 +77,53 @@ vector<vector<Point2i>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
                 int K = phaseAtPixel / CV_PI;
                 phaseAtPixel = phaseAtPixel - K*CV_PI;
             }
-            for (int j = 0; j < pro; j++)
+            for (int j = 0; j < projectPhaseImage.cols; j++)
             {
-
-            }
-            for (int j = 0; j < leftPhaseImage.cols; j++)
-            {
-                if (leftPhaseImage.at<float>(i, j) == phaseAtPixel)
-                {  
-                    int Z = (f * T) / ();
-                    leftEqualPhasePoint.push_back(Point2i(i, j));
-                }
-                if (rightPhaseImage.at<float>(i, j) == phaseAtPixel)
+                for (int k = 0; k < leftPhaseImage.cols; k++)
                 {
-                    rightEqualPhasePoint.push_back(Point2i(i, j));
+                    if (leftPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    {                        
+                        float Z = (f * T) / (k - i);
+                        leftEqualPhasePoint.push_back(Point3f(i, k, Z));
+                    }
+                    if (rightPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    {
+                        float Z = (f * T) / (i - k);
+                        rightEqualPhasePoint.push_back(Point3f(i, k, Z));
+                    }
                 }
             }
         }
     }
+    if (stripe == VERTICAL)//竖直条纹
+    {
+        for (int i = 0; i < projectPhaseImage.rows; ++i)
+        {
+            float phaseAtPixel = (i * 2 * CV_PI * STRIPE_NUM) / 480 - (2 * CV_PI) / 3;
+            while (phaseAtPixel > CV_PI)
+            {
+                int K = phaseAtPixel / CV_PI;
+                phaseAtPixel = phaseAtPixel - K * CV_PI;
+            }
+            for (int j = 0; j < projectPhaseImage.cols; j++)
+            {
+                for (int k = 0; k < leftPhaseImage.cols; k++)
+                {
+                    if (leftPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    {
+                        float Z = (f * T) / (k - i);
+                        leftEqualPhasePoint.push_back(Point3f(i, k, Z));
+                    }
+                    if (rightPhaseImage.at<float>(i, k) == phaseAtPixel)
+                    {
+                        float Z = (f * T) / (i - k);
+                        rightEqualPhasePoint.push_back(Point3f(i, k, Z));
+                    }
+                }
+            }
+        }
+    }
+
     EqualPhasePoint.push_back(leftEqualPhasePoint);
     EqualPhasePoint.push_back(rightEqualPhasePoint);
     return EqualPhasePoint; 
@@ -101,20 +135,21 @@ vector<vector<Point2i>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
 
 int main(int argc, const char *argv[])
 {
-    Mat projectPhaseImage = imread("./Fringe_vert1.png");
+    Mat projectPhaseImage = imread("./Fringe_vert1.bmp");
+
     vector<string> leftCameraPath;
-    leftCameraPath.push_back("./phase1.jpg");
-    leftCameraPath.push_back("./phase2.jpg");
-    leftCameraPath.push_back("./phase3.jpg");
+    leftCameraPath.push_back("./PhaseShiftleft02.bmp");
+    leftCameraPath.push_back("./PhaseShiftleft03.bmp");
+    leftCameraPath.push_back("./PhaseShiftleft04.bmp");
     Mat leftWrappedimage = getWrappedPhase(leftCameraPath);
 
     vector<string> rightCameraPath;
-    rightCameraPath.push_back("./phase1.jpg");
-    rightCameraPath.push_back("./phase2.jpg");
-    rightCameraPath.push_back("./phase3.jpg");
+    rightCameraPath.push_back("./PhaseShiftright02.bmp");
+    rightCameraPath.push_back("./PhaseShiftright03.bmp");
+    rightCameraPath.push_back("./PhaseShiftright04.bmp");
     Mat rightWrappedimage = getWrappedPhase(rightCameraPath);
 
-    vector<vector<Point2i>> EqualPhasePoint = getEqualPhasePoint(leftWrappedimage, rightWrappedimage, projectPhaseImage, HORIZONTAL);
+    vector<vector<Point3f>> EqualPhasePoint = getEqualPhasePoint(leftWrappedimage, rightWrappedimage, projectPhaseImage, VERTICAL);
    
 
     return 0;
