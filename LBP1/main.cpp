@@ -1,11 +1,38 @@
 #include <opencv.hpp>
 #include <vector>
+#include <map>
+#include <unordered_map>
+
+#include <string>
 using namespace std;
 using namespace cv;
 
 #define HORIZONTAL 0
 #define VERTICAL 1
 #define STRIPE_NUM 26
+struct Point2t
+{
+    Point2t(int x_, int y_)
+    {
+        x = x_;
+        y = y_;
+    }
+    Point2t(const Point2t& p2t)
+    {
+        this->x = p2t.x;
+        this->y = p2t.y;
+    }
+    bool operator <(const Point2t& p2t) const
+    {
+        if (this->x == p2t.x)
+        {
+            return this->y < p2t.y;
+        }
+        return this->x < p2t.x;
+    }
+    int x;
+    int y;
+};
  
 void computeWrappedPhase(Mat* img1, Mat* img2, Mat* img3, Mat* dstWrappedPhase)
 {
@@ -66,8 +93,10 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
 
     float f = 0.035;//焦距 focal
     float T = 0.36;//投影仪至相机光心距离
-
-    if (stripe == HORIZONTAL)//水平条纹
+    //map<投影仪像素点（x, y）,极线约束上的左右照片像素3维点>
+    map<Point2t, vector<vector<Point3f>>> map_EqualPhasePoint;
+    //水平条纹
+    if (stripe == HORIZONTAL)
     {
         for (int row = 0; row < projectPhaseImage.rows; ++row)
         {
@@ -84,59 +113,73 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
             }
             for (int col = 0; col < projectPhaseImage.cols; ++col)
             {
-                for (int col_leftPhaseImage = 0; col_leftPhaseImage < leftPhaseImage.cols; ++col_leftPhaseImage)
+                for (int col_cameraPhaseImage = 0; col_cameraPhaseImage < leftPhaseImage.cols; ++col_cameraPhaseImage)
                 {
-                    if (leftPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
+                    if (leftPhaseImage.at<float>(row, col_cameraPhaseImage) == phaseAtPixel)
                     {                        
-                        float Z = (f * T) / (col_leftPhaseImage - row);
-                        leftEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
+                        float Z = (f * T) / (col_cameraPhaseImage - row);
+                        leftEqualPhasePoint.push_back(Point3f(col_cameraPhaseImage, row, Z));
                     }
-                    if (rightPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
+                    if (rightPhaseImage.at<float>(row, col_cameraPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (row - col_leftPhaseImage);
-                        rightEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
+                        float Z = (f * T) / (row - col_cameraPhaseImage);
+                        rightEqualPhasePoint.push_back(Point3f(col_cameraPhaseImage, row, Z));
                     }
                 }
             }
         }
     }
-    if (stripe == VERTICAL)//竖直条纹
+    if (stripe == VERTICAL)//竖直条纹 其每一列的相位都一致
     {
 #pragma omp parallel for
         for (int col = 0; col < projectPhaseImage.cols; ++col)
         {
             float phaseAtPixel = (col * 2 * CV_PI * STRIPE_NUM) / projectPhaseImage.cols - (2 * CV_PI) / 3;
-            while (phaseAtPixel > CV_PI)
+            while (phaseAtPixel > CV_PI)//主要是为了防止出现 phaseAtPixel 不在[-PI, PI] 这段区间时进行 K* PI 的一个截取，注意正负
             {
                 int K = phaseAtPixel / CV_PI;
                 phaseAtPixel = phaseAtPixel - K * CV_PI;
             }
-            while (phaseAtPixel < -CV_PI)
+            while (phaseAtPixel < -CV_PI)//主要是为了防止出现 phaseAtPixel 不在[-PI, PI] 这段区间时进行 K* PI 的一个截取，注意正负
             {
                 int K = phaseAtPixel / CV_PI;
                 phaseAtPixel = phaseAtPixel + K * CV_PI;
             }
-            for (int row = 0; row < projectPhaseImage.rows; ++row)
+            for (int row = 0; row < projectPhaseImage.rows; ++row)//外层循环是每一列，内层循环是投影仪的每一行 找左右图中跟其同行（极线约束）中相位相等的像素
             {
-                for (int col_leftPhaseImage = 0; col_leftPhaseImage < leftPhaseImage.cols; ++col_leftPhaseImage)
+
+                for (int col_cameraPhaseImage = 0; col_cameraPhaseImage < leftPhaseImage.cols; ++col_cameraPhaseImage)
                 {
-                    if (leftPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
+                    if (leftPhaseImage.at<float>(row, col_cameraPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (col_leftPhaseImage - row);
-                        leftEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
+                        float Z = (f * T) / (col_cameraPhaseImage - col);
+                        leftEqualPhasePoint.push_back(Point3f(col_cameraPhaseImage, row, Z));
                     }
-                    if (rightPhaseImage.at<float>(row, col_leftPhaseImage) == phaseAtPixel)
+                    if (rightPhaseImage.at<float>(row, col_cameraPhaseImage) == phaseAtPixel)
                     {
-                        float Z = (f * T) / (row - col_leftPhaseImage);
-                        rightEqualPhasePoint.push_back(Point3f(col_leftPhaseImage, row, Z));
-                    }
+                        float Z = (f * T) / (col - col_cameraPhaseImage);//
+                        if (Z < 0)
+                            break;
+                        rightEqualPhasePoint.push_back(Point3f(col_cameraPhaseImage, row, Z));
+                    }//right 为负？(为负的给去掉)数量太多
+
                 }
+                //在左或者右中找到了匹配点
+                if (!leftEqualPhasePoint.empty() || !rightEqualPhasePoint.empty())
+                {
+                    EqualPhasePoint.push_back(leftEqualPhasePoint);
+                    EqualPhasePoint.push_back(rightEqualPhasePoint);
+                    map_EqualPhasePoint.insert({ Point2t(col, row), EqualPhasePoint });
+                    leftEqualPhasePoint.clear();
+                    rightEqualPhasePoint.clear();
+                    EqualPhasePoint.clear();
+                }
+
             }
         }
     }
 
-    EqualPhasePoint.push_back(leftEqualPhasePoint);
-    EqualPhasePoint.push_back(rightEqualPhasePoint);
+
     return EqualPhasePoint; 
     
 }
