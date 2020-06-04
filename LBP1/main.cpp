@@ -2,14 +2,15 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
-
 #include <string>
+
 using namespace std;
 using namespace cv;
-
+//水平条纹宏定义为 0，竖直条纹宏定义为 1， STRIPE_NUM 为条纹数量
 #define HORIZONTAL 0
 #define VERTICAL 1
 #define STRIPE_NUM 26
+//一个二维点坐标的结构体，本来是考虑使用opencv 自带的 Point，但是有一个 map_EqualPhasePoint.insert({ Point(col, row), EqualPhasePoint }); 老是报错，索性自己定义了一个结构体
 struct Point2t
 {
     Point2t(int x_, int y_)
@@ -33,7 +34,7 @@ struct Point2t
     int x;
     int y;
 };
- 
+ //这块是参考@卢平悦 的计算包裹相位代码，返回值是一个[-PI, PI]范围的相位值
 void computeWrappedPhase(Mat* img1, Mat* img2, Mat* img3, Mat* dstWrappedPhase)
 {
     typedef float phaseType;
@@ -52,6 +53,7 @@ void computeWrappedPhase(Mat* img1, Mat* img2, Mat* img3, Mat* dstWrappedPhase)
             dstWrappedPhase->at<phaseType>(i, j) = phase;
         }
 }
+//这块是对左右相机求包裹相位的一个包装代码，省去了每次需要分别考虑左右相机的烦恼，直接传左右相机相片路径就可以了
 Mat getWrappedPhase(vector<string> &path)
 {
     if (path.size() != 3)
@@ -78,15 +80,15 @@ Mat getWrappedPhase(vector<string> &path)
 
     return dstWrappedPhase;
 }
-//获取双目照片与投影仪相位相等的点的坐标
+/*获取双目照片与投影仪相位相等的点的坐标
+*@input:左右两张条纹图，投影仪投射的条纹图，遍历一行（极线约束的这一行）找相位相等的点
+*@output：vector 存储相位相等点的坐标
+*/
+
 vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseImage, Mat& projectPhaseImage, int stripe)
 {
     //对于投影仪上任意一个像素 P ，求出它的相位，通过 【(x*2*PI*条纹数)/width + 初相 】得到
     //由于现在没有双目照片，就先假定吧
-    /*
-    *@input:左右两张条纹图，投影仪投射的条纹图，遍历一行（极线约束的这一行）找相位相等的点
-    *@output：vector 存储相位相等点的坐标
-    */
     vector<Point3f> leftEqualPhasePoint;
     vector<Point3f> rightEqualPhasePoint;
     vector<vector<Point3f>> EqualPhasePoint;
@@ -201,8 +203,7 @@ int main(int argc, const char *argv[])
     rightCameraPath.push_back("./PhaseShiftright02.bmp");
     rightCameraPath.push_back("./PhaseShiftright03.bmp");
     rightCameraPath.push_back("./PhaseShiftright04.bmp");
-    Mat rightWrappedimage = getWrappedPhase(rightCameraPath);
-
+    Mat rightWrappedimage = getWrappedPhase(rightCameraPath); 
     vector<vector<Point3f>> EqualPhasePoint = getEqualPhasePoint(leftWrappedimage, rightWrappedimage, projectPhaseImage, VERTICAL);
    
 
