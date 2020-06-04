@@ -162,7 +162,9 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
                         float Z = (f * T) / (col - col_cameraPhaseImage);//
                         if (Z < 0)
                             break;
-                        rightEqualPhasePoint.push_back(Point3f(col_cameraPhaseImage, row, Z));
+                        float X = (col_cameraPhaseImage * T) / (col - col_cameraPhaseImage);
+                        float Y = (row * T) / (col - col_cameraPhaseImage);
+                        rightEqualPhasePoint.push_back(Point3f(X, Y, Z));
                     }//right 为负？(为负的给去掉)数量太多
 
                 }
