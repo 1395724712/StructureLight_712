@@ -82,10 +82,10 @@ Mat getWrappedPhase(vector<string> &path)
 }
 /*获取双目照片与投影仪相位相等的点的坐标
 *@input:左右两张条纹图，投影仪投射的条纹图，遍历一行（极线约束的这一行）找相位相等的点
-*@output：vector 存储相位相等点的坐标
+*@output：//map<投影仪二维像素点（u, v）,极线约束上的左右照片像素3维点（x, y, z）>
 */
 
-vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseImage, Mat& projectPhaseImage, int stripe)
+map<Point2t, vector<vector<Point3f>>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseImage, Mat& projectPhaseImage, int stripe)
 {
     //对于投影仪上任意一个像素 P ，求出它的相位，通过 【(x*2*PI*条纹数)/width + 初相 】得到
     //由于现在没有双目照片，就先假定吧
@@ -95,9 +95,9 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
 
     float f = 0.035;//焦距 focal
     float T = 0.36;//投影仪至相机光心距离
-    //map<投影仪像素点（x, y）,极线约束上的左右照片像素3维点>
+    
     map<Point2t, vector<vector<Point3f>>> map_EqualPhasePoint;
-    //水平条纹
+    //水平条纹 每一行的相位都一样 待完善
     if (stripe == HORIZONTAL)
     {
         for (int row = 0; row < projectPhaseImage.rows; ++row)
@@ -131,7 +131,8 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
             }
         }
     }
-    if (stripe == VERTICAL)//竖直条纹 其每一列的相位都一致
+    //竖直条纹 其每一列的相位都一致
+    if (stripe == VERTICAL)
     {
 #pragma omp parallel for
         for (int col = 0; col < projectPhaseImage.cols; ++col)
@@ -184,7 +185,7 @@ vector<vector<Point3f>> getEqualPhasePoint(Mat& leftPhaseImage, Mat& rightPhaseI
     }
 
 
-    return EqualPhasePoint; 
+    return map_EqualPhasePoint;
     
 }
 //对于照相机上极线上的像素点，进行遍历，求出与上面相位相等的候选像素点
@@ -206,7 +207,8 @@ int main(int argc, const char *argv[])
     rightCameraPath.push_back("./PhaseShiftright03.bmp");
     rightCameraPath.push_back("./PhaseShiftright04.bmp");
     Mat rightWrappedimage = getWrappedPhase(rightCameraPath); 
-    vector<vector<Point3f>> EqualPhasePoint = getEqualPhasePoint(leftWrappedimage, rightWrappedimage, projectPhaseImage, VERTICAL);
+
+    map<Point2t, vector<vector<Point3f>>> EqualPhasePoint = getEqualPhasePoint(leftWrappedimage, rightWrappedimage, projectPhaseImage, VERTICAL);
    
 
     return 0;
